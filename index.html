@@ -56,8 +56,8 @@
             </div>
 
             <div class="w-full sm:w-auto bg-slate-50 border border-slate-200 rounded-lg p-2.5 px-4 text-xs text-slate-700 flex flex-col justify-center min-w-[260px]">
-                <span class="font-bold text-slate-900 mb-0.5">Arquivos Carregados:</span>
-                <span id="fileNamesDisplay" class="italic text-slate-500 truncate max-w-md">Nenhum arquivo selecionado</span>
+                <span class="font-bold text-slate-900 mb-0.5">Ficheiros Carregados:</span>
+                <span id="fileNamesDisplay" class="italic text-slate-500 truncate max-w-md">Nenhum ficheiro selecionado</span>
             </div>
         </div>
 
@@ -82,7 +82,7 @@
                             </tr>
                         </thead>
                         <tbody id="mainTableBody">
-                            <tr><td colspan="7" class="py-4 text-slate-500 italic">Nenhum dado importado ainda. Suba os arquivos XML.</td></tr>
+                            <tr><td colspan="7" class="py-4 text-slate-500 italic">Nenhum dado importado ainda. Suba os ficheiros XML.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -155,15 +155,15 @@
                             </div>
                         </div>
 
-                        <!-- BOTÕES DE BACKUP SEPARADOS E ESTILIZADOS -->
+                        <!-- GESTÃO DE BACKUP -->
                         <div class="bg-white shadow-md rounded-xl p-3 border border-slate-300 text-xs text-slate-600 space-y-2">
-                            <span class="block font-bold text-slate-700 uppercase">Gerenciamento de Backup</span>
+                            <span class="block font-bold text-slate-700 uppercase">Gestão de Backup</span>
                             <div class="grid grid-cols-2 gap-2">
                                 <button onclick="exportarJsonDia()" class="bg-blue-900 hover:bg-blue-950 text-white font-bold py-2.5 px-3 rounded-lg transition flex items-center justify-center gap-2 shadow text-xs tracking-wider uppercase" title="Criar Backup JSON do Dia">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                                     Gerar Backup
                                 </button>
-                                <label class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 px-3 rounded-lg transition flex items-center justify-center gap-2 shadow text-xs tracking-wider uppercase cursor-pointer" title="Carregar Arquivo de Backup JSON">
+                                <label class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 px-3 rounded-lg transition flex items-center justify-center gap-2 shadow text-xs tracking-wider uppercase cursor-pointer" title="Carregar Ficheiro de Backup JSON">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                                     Carregar
                                     <input type="file" id="jsonFileInputDireto" accept=".json" class="hidden" onchange="carregarArquivoJsonDireto(event)">
@@ -219,7 +219,6 @@
     <script>
         let mainData = [];
         let auditData = [];
-        let filiaisInseridasHoje = new Set();
         let metaBatidaHoje = false;
 
         const STORAGE_KEY_PREFIX = 'cd_mensal_confs_';
@@ -241,7 +240,8 @@
         function sincronizarCoresComHistorico() {
             const historicoConfs = carregarHistoricoConferenciasMensal();
             mainData.forEach(item => {
-                item.confCount = historicoConfs[item.filial] || 0;
+                // Busca normalizada por string ou número no objeto do histórico
+                item.confCount = historicoConfs[item.filial] || historicoConfs[String(item.filial)] || 0;
             });
         }
 
@@ -272,7 +272,7 @@
             tbody.innerHTML = '';
             
             if (mainData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-slate-500 italic">Nenhum dado importado ainda. Suba os arquivos XML.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-slate-500 italic">Nenhum dado importado ainda. Suba os ficheiros XML.</td></tr>`;
                 return;
             }
 
@@ -342,7 +342,6 @@
                 localStorage.setItem('cd_persisted_orderNum', document.getElementById('mainOrderNum').innerText);
                 localStorage.setItem('cd_persisted_cdName', document.getElementById('cdNameDisplay').innerText);
                 localStorage.setItem('cd_persisted_fileNames', document.getElementById('fileNamesDisplay').innerText);
-                localStorage.setItem('cd_persisted_filiaisInseridas', JSON.stringify(Array.from(filiaisInseridasHoje)));
             } catch(err) { console.error(err); }
         }
 
@@ -359,16 +358,13 @@
 
             if (modo === 'inserir') {
                 if (index >= 0) {
-                    if (filiaisInseridasHoje.has(filialInput)) {
-                        showAlert(`Atenção: A filial ${filialInput} já foi inserida hoje!`);
+                    // Evitar duplicatas no mesmo lote de auditoria atual
+                    if (auditData.some(a => a.filial === filialInput)) {
+                        showAlert(`Atenção: A filial ${filialInput} já está na lista de auditoria deste turno!`);
                         return;
                     }
-                    filiaisInseridasHoje.add(filialInput);
-                    jaSalvoNesteTurno = false; 
+                    
                     const item = mainData[index];
-                    
-                    auditData = auditData.filter(a => a.filial !== item.filial);
-                    
                     auditData.unshift({ 
                         filial: item.filial, 
                         qtd: item.total, 
@@ -376,7 +372,7 @@
                     });
 
                     renderAuditTable();
-                    renderMainTable(); // Atualizar a tabela principal sem alterar cores indevidamente
+                    renderMainTable();
                     updateTotalAudited();
                     salvarPersistenciaLocal();
                     showAlert(`Filial ${filialInput} inserida!`);
@@ -384,37 +380,25 @@
                     showAlert(`Atenção: A filial ${filialInput} não foi encontrada no pedido.`);
                 }
             } else {
-                if (filiaisInseridasHoje.has(filialInput)) {
-                    filiaisInseridasHoje.delete(filialInput);
-                    const item = mainData[index];
-                    let auditIndex = auditData.findIndex(a => a.filial === filialInput);
-                    if (auditIndex >= 0) {
-                        auditData[auditIndex].qtd -= item.total;
-                        if (auditData[auditIndex].qtd <= 0) auditData.splice(auditIndex, 1);
-                    }
+                let auditIndex = auditData.findIndex(a => a.filial === filialInput);
+                if (auditIndex >= 0) {
+                    auditData.splice(auditIndex, 1);
                     renderAuditTable();
                     renderMainTable();
                     updateTotalAudited();
                     salvarPersistenciaLocal();
-                    showAlert(`Filial ${filialInput} removida.`);
+                    showAlert(`Filial ${filialInput} removida da auditoria.`);
                 } else {
-                    showAlert(`A filial ${filialInput} não está na lista de hoje.`);
+                    showAlert(`A filial ${filialInput} não está na lista de auditoria atual.`);
                 }
             }
             document.getElementById('inputFilialDireto').value = '';
             document.getElementById('inputFilialDireto').focus();
         }
 
-        let jaSalvoNesteTurno = false;
-
         function salvarDia() {
             if (auditData.length === 0) {
                 showAlert("Nenhuma filial inserida na auditoria para salvar.");
-                return;
-            }
-
-            if (jaSalvoNesteTurno) {
-                showAlert("Este turno já foi salvo. Para novos lançamentos, insira novas lojas.");
                 return;
             }
             
@@ -422,7 +406,6 @@
                 const backupState = {
                     mainData: JSON.parse(JSON.stringify(mainData)),
                     auditData: JSON.parse(JSON.stringify(auditData)),
-                    filiaisInseridas: Array.from(filiaisInseridasHoje),
                     mesAno: getMesAnoAtual(),
                     historicoMensal: carregarHistoricoConferenciasMensal()
                 };
@@ -431,23 +414,20 @@
             
             const historicoConfs = carregarHistoricoConferenciasMensal();
             
-            // Incrementar APENAS as lojas presentes na tabela de auditoria atual (auditData)
+            // Incrementar APENAS as lojas presentes na tabela de auditoria atual (auditData) exatamente UMA vez
             auditData.forEach(item => {
-                historicoConfs[item.filial] = (historicoConfs[item.filial] || 0) + 1;
+                const chave = String(item.filial);
+                historicoConfs[chave] = (historicoConfs[chave] || historicoConfs[item.filial] || 0) + 1;
             });
             
             const mesAno = getMesAnoAtual();
             localStorage.setItem(STORAGE_KEY_PREFIX + mesAno, JSON.stringify(historicoConfs));
             
-            sincronizarCoresComHistorico();
-            
-            jaSalvoNesteTurno = true;
+            // Limpeza rigorosa do auditData após salvar com sucesso
             auditData = [];
-            filiaisInseridasHoje.clear(); // Limpar para permitir novo turno limpo sem multiplicar anteriores
-            
             localStorage.removeItem('cd_persisted_auditData');
-            localStorage.removeItem('cd_persisted_filiaisInseridas');
             
+            sincronizarCoresComHistorico();
             salvarPersistenciaLocal();
             renderMainTable();
             renderAuditTable();
@@ -458,7 +438,6 @@
         function resetData() {
             mainData = [];
             auditData = [];
-            filiaisInseridasHoje.clear();
             metaBatidaHoje = false;
             localStorage.removeItem(STORAGE_KEY_PREFIX + getMesAnoAtual());
             localStorage.removeItem('cd_persisted_mainData');
@@ -466,14 +445,13 @@
             localStorage.removeItem('cd_persisted_orderNum');
             localStorage.removeItem('cd_persisted_cdName');
             localStorage.removeItem('cd_persisted_fileNames');
-            localStorage.removeItem('cd_persisted_filiaisInseridas');
             
             renderMainTable();
             renderAuditTable();
             updateTotalAudited();
             document.getElementById('totalPedidoGeral').innerText = '0';
             document.getElementById('xmlFileInput').value = "";
-            document.getElementById('fileNamesDisplay').innerText = "Nenhum arquivo selecionado";
+            document.getElementById('fileNamesDisplay').innerText = "Nenhum ficheiro selecionado";
             document.getElementById('cdNameDisplay').innerText = "";
             showAlert("Dados limpos.");
         }
@@ -667,9 +645,7 @@
             sincronizarCoresComHistorico();
 
             auditData = [];
-            filiaisInseridasHoje.clear();
             metaBatidaHoje = false;
-            jaSalvoNesteTurno = false;
 
             let displayFinalPedido = numPedidoDetectado;
             if (sequencialDetectado !== "---") {
@@ -724,7 +700,6 @@
         function executarFuncaoEspecial(acao) {
             if (acao === 'marcarTodas') {
                 mainData.forEach(item => {
-                    filiaisInseridasHoje.add(item.filial);
                     let auditIndex = auditData.findIndex(a => a.filial === item.filial);
                     if (auditIndex < 0) {
                         auditData.unshift({ filial: item.filial, qtd: item.total, rotas: String(item.rota) });
@@ -786,11 +761,11 @@
                     updateTotalAudited();
                     atualizarTotalGeralPedido();
                     salvarPersistenciaLocal();
-                    showAlert("Arquivo JSON carregado com sucesso!");
+                    showAlert("Ficheiro JSON carregado com sucesso!");
                     fecharModalLuis();
                 } catch(err) {
                     console.error(err);
-                    showAlert("Erro ao processar arquivo JSON.");
+                    showAlert("Erro ao processar ficheiro JSON.");
                 }
             };
             reader.readAsText(file);
@@ -799,14 +774,13 @@
         function desfazerSalvarDia() {
             const backupStr = localStorage.getItem('cd_backup_ultimo_salvar');
             if (!backupStr) {
-                showAlert("Nenhum registro anterior encontrado para desfazer.");
+                showAlert("Nenhum registo anterior encontrado para desfazer.");
                 return;
             }
             try {
                 const backup = JSON.parse(backupStr);
                 mainData = backup.mainData;
                 auditData = backup.auditData;
-                filiaisInseridasHoje = new Set(backup.filiaisInseridas || []);
                 
                 if (backup.mesAno && backup.historicoMensal) {
                     localStorage.setItem(STORAGE_KEY_PREFIX + backup.mesAno, JSON.stringify(backup.historicoMensal));
@@ -838,28 +812,19 @@
 
             let liberou = false;
 
-            if (filiaisInseridasHoje.has(filialNum)) {
-                filiaisInseridasHoje.delete(filialNum);
-                liberou = true;
-            }
-
-            const item = mainData.find(i => i.filial === filialNum);
             const historicoConfs = carregarHistoricoConferenciasMensal();
-            if (historicoConfs[filialNum] && historicoConfs[filialNum] > 0) {
+            const chave = String(filialNum);
+            if (historicoConfs[chave] && historicoConfs[chave] > 0) {
+                historicoConfs[chave] -= 1;
+                const mesAno = getMesAnoAtual();
+                localStorage.setItem(STORAGE_KEY_PREFIX + mesAno, JSON.stringify(historicoConfs));
+                liberou = true;
+            } else if (historicoConfs[filialNum] && historicoConfs[filialNum] > 0) {
                 historicoConfs[filialNum] -= 1;
                 const mesAno = getMesAnoAtual();
                 localStorage.setItem(STORAGE_KEY_PREFIX + mesAno, JSON.stringify(historicoConfs));
                 liberou = true;
             }
-
-            try {
-                let savedFiliaisIns = localStorage.getItem('cd_persisted_filiaisInseridas');
-                if (savedFiliaisIns) {
-                    let arr = JSON.parse(savedFiliaisIns);
-                    arr = arr.filter(f => f !== filialNum);
-                    localStorage.setItem('cd_persisted_filiaisInseridas', JSON.stringify(arr));
-                }
-            } catch(e) { console.error(e); }
 
             sincronizarCoresComHistorico();
             salvarPersistenciaLocal();
@@ -870,7 +835,7 @@
             if (liberou) {
                 showAlert(`Loja ${filialNum} liberada e contagem ajustada com sucesso!`);
             } else {
-                showAlert(`A loja ${filialNum} não estava bloqueada ou não possui registros salvos.`);
+                showAlert(`A loja ${filialNum} não possui registos salvos.`);
             }
             fecharModalLuis();
         }
@@ -893,10 +858,10 @@
                     updateTotalAudited();
                     atualizarTotalGeralPedido();
                     salvarPersistenciaLocal();
-                    showAlert("Arquivo de backup JSON carregado com sucesso!");
+                    showAlert("Ficheiro de backup JSON carregado com sucesso!");
                 } catch(err) {
                     console.error(err);
-                    showAlert("Erro ao processar arquivo JSON.");
+                    showAlert("Erro ao processar ficheiro JSON.");
                 }
             };
             reader.readAsText(file);
@@ -909,19 +874,17 @@
                 const savedOrder = localStorage.getItem('cd_persisted_orderNum');
                 const savedCd = localStorage.getItem('cd_persisted_cdName');
                 const savedFiles = localStorage.getItem('cd_persisted_fileNames');
-                const savedFiliaisIns = localStorage.getItem('cd_persisted_filiaisInseridas');
 
                 if (savedMain) mainData = JSON.parse(savedMain);
                 if (savedAudit) auditData = JSON.parse(savedAudit);
                 if (savedOrder && savedOrder !== "---") document.getElementById('mainOrderNum').innerText = savedOrder;
                 if (savedCd) document.getElementById('cdNameDisplay').innerText = savedCd;
-                if (savedFiles && savedFiles !== "Nenhum arquivo selecionado") {
+                if (savedFiles && savedFiles !== "Nenhum ficheiro selecionado") {
                     const fd = document.getElementById('fileNamesDisplay');
                     fd.innerText = savedFiles;
                     fd.classList.remove('italic', 'text-slate-500');
                     fd.classList.add('font-semibold', 'text-blue-700');
                 }
-                if (savedFiliaisIns) filiaisInseridasHoje = new Set(JSON.parse(savedFiliaisIns));
                 
                 sincronizarCoresComHistorico();
             } catch(e) {
@@ -996,7 +959,7 @@
                         <span>[EXPORT JSON]</span>
                     </button>
                     <label class="w-full text-left bg-white hover:bg-gray-100 border border-black text-black font-semibold py-2.5 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center cursor-pointer">
-                        <span>Carregar Arquivo JSON</span>
+                        <span>Carregar Ficheiro JSON</span>
                         <span>[IMPORT JSON]</span>
                         <input type="file" id="jsonFileInput" accept=".json" class="hidden" onchange="carregarArquivoJson(event)">
                     </label>
@@ -1012,7 +975,7 @@
                             <input type="number" id="inputCorrigirLoja" placeholder="Nº da loja..." class="flex-grow bg-white border border-black px-2 py-1.5 text-xs text-black font-bold focus:outline-none">
                             <button onclick="liberarLojaManual()" class="bg-black hover:bg-gray-800 text-white font-bold px-3 py-1.5 text-xs uppercase tracking-wider transition">Liberar</button>
                         </div>
-                        <p class="text-[10px] text-gray-600">Remove o bloqueio de duplicata e desconta 1 salvamento da loja informada.</p>
+                        <p class="text-[10px] text-gray-600">Remove o bloqueio e desconta 1 salvamento da loja informada.</p>
                     </div>
                     <button onclick="executarFuncaoEspecial('forcarMeta')" class="w-full text-left bg-gray-100 hover:bg-gray-200 border border-black text-black font-semibold py-2.5 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
                         <span>Forçar Disparo de Meta Atingida</span>
