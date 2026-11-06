@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Operacional CD</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        .excel-table th { background-color: #1e3a8a; color: #ffffff; font-weight: 700; text-align: center; border: 1px solid #94a3b8; padding: 8px 4px; font-size: 13px; position: sticky; top: 0; z-index: 10; user-select: none; transition: background 0.2s; }
+        .excel-table th:hover { background-color: #1e40af; cursor: pointer; }
+        .excel-table td { border: 1px solid #cbd5e1; text-align: center; padding: 5px 4px; font-size: 13px; font-weight: 500; }
+        .excel-table tr:nth-child(even) td { background-color: #f8fafc; }
+        .excel-table tr:nth-child(odd) td { background-color: #ffffff; }
+        .excel-table tr:hover td { background-color: #e2e8f0; }
+        .bg-conf-green { background-color: #22c55e !important; color: #000 !important; font-weight: bold; }
+        .bg-conf-yellow { background-color: #facc15 !important; color: #000 !important; font-weight: bold; }
+        .bg-conf-orange { background-color: #f97316 !important; color: #fff !important; font-weight: bold; }
+        .bg-conf-red { background-color: #ef4444 !important; color: #fff !important; font-weight: bold; }
+        .sort-icon { display: inline-block; width: 14px; font-size: 11px; opacity: 0.4; margin-left: 4px; transition: all 0.2s; }
+        .sort-icon.active { opacity: 1; color: #fbbf24; font-weight: 900; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+<body class="p-4 md:p-6 text-slate-800">
+
+    <div class="max-w-7xl mx-auto">
+        
+        <!-- Alerta Flutuante (Toast) -->
+        <div id="alertBox" class="hidden fixed bottom-6 right-6 z-50 max-w-md w-full p-4 rounded-xl bg-blue-900 border-2 border-blue-600 text-white flex justify-between items-center shadow-2xl transition-all duration-300">
+            <span id="alertMessage" class="text-sm font-semibold">Ação realizada com sucesso!</span>
+            <button onclick="closeAlert()" class="font-bold text-xl px-2 text-white hover:text-slate-300">&times;</button>
+        </div>
+
+        <!-- ÁREA DE BANCOS DE DADOS -->
+        <div class="bg-white shadow-xl rounded-xl p-4 md:p-5 border border-slate-300 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-4 flex-wrap">
+                <div onclick="abrirModalNuvem()" class="cursor-pointer group flex flex-col items-center bg-emerald-50 hover:bg-emerald-100 border-2 border-dashed border-emerald-400 hover:border-emerald-600 p-3 rounded-xl transition-all shadow-sm" title="Abrir relatórios na nuvem">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-emerald-700 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h10a4 4 0 004-4M3 15a4 4 0 014-4h10a4 4 0 014 4M3 15V9a6 6 0 0112 0v6m-6 0v2m0 0h2m-2 0H8" />
+                    </svg>
+                    <span class="text-xs font-black text-emerald-900 mt-1 tracking-wider">BD_NUVEM</span>
+                </div>
+
+                <input type="file" id="xmlFileInput" multiple accept=".xml" class="hidden" onchange="processarArquivosXML()">
+                
+                <label for="xmlFileInput" class="cursor-pointer group flex flex-col items-center bg-blue-50 hover:bg-blue-100 border-2 border-dashed border-blue-400 hover:border-blue-600 p-3 rounded-xl transition-all shadow-sm" title="Carregar XMLs locais">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-700 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                    </svg>
+                    <span class="text-xs font-black text-blue-900 mt-1 tracking-wider">BD_XML</span>
+                </label>
+
+                <div>
+                    <h2 class="text-blue-900 font-bold text-sm md:text-base uppercase tracking-wide">Base de Dados Operacional</h2>
+                    <p class="text-xs text-slate-500">Meta Diária: <strong class="text-emerald-700" id="metaTopoDisplay">3.900</strong> unidades | Clique em <strong>BD_NUVEM</strong> ou <strong>BD_XML</strong>.</p>
+                </div>
+            </div>
+
+            <div class="w-full sm:w-auto bg-slate-50 border border-slate-200 rounded-lg p-2.5 px-4 text-xs text-slate-700 flex flex-col justify-center min-w-[260px]">
+                <span class="font-bold text-slate-900 mb-0.5">Arquivos Carregados:</span>
+                <span id="fileNamesDisplay" class="italic text-slate-500 truncate max-w-md">Nenhum arquivo selecionado</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- TABELA PRINCIPAL (CD) -->
+            <div class="lg:col-span-6 bg-white shadow-xl rounded-xl overflow-hidden border border-slate-300 flex flex-col">
+                <div class="bg-blue-900 text-white py-2.5 px-4 font-bold tracking-wider text-base border-b border-blue-950 flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <span>CD <span id="cdNameDisplay"></span> (<span id="countFiliais">0</span> Lojas)</span>
+                    
+                    <!-- BARRA DE PESQUISA -->
+                    <input type="text" id="searchInput" onkeyup="renderMainTable()" placeholder="Buscar filial ou rota..." class="w-full sm:w-52 px-3 py-1 text-xs text-slate-900 font-medium rounded shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-slate-400">
+                </div>
+                <div class="overflow-y-auto max-h-[680px] flex-grow">
+                    <table class="w-full excel-table border-collapse">
+                        <thead>
+                            <tr>
+                                <th class="w-16" onclick="sortTableManual('rota')" title="Ordenar por Rota">ROTA <span id="sort-icon-rota" class="sort-icon">↕</span></th>
+                                <th class="w-20" onclick="sortTableManual('filial')" title="Ordenar por Filial">FILIAL <span id="sort-icon-filial" class="sort-icon">↕</span></th>
+                                <th onclick="sortTableManual('pulmao')" title="Ordenar por Pulmão">PULMÃO <span id="sort-icon-pulmao" class="sort-icon">↕</span></th>
+                                <th onclick="sortTableManual('volumoso')" title="Ordenar por Volumoso">VOLUMOSO <span id="sort-icon-volumoso" class="sort-icon">↕</span></th>
+                                <th onclick="sortTableManual('fraldas')" title="Ordenar por Fraldas">FRALDAS <span id="sort-icon-fraldas" class="sort-icon">↕</span></th>
+                                <th onclick="sortTableManual('linha')" title="Ordenar por Linha">LINHA <span id="sort-icon-linha" class="sort-icon">↕</span></th>
+                                <th onclick="sortTableManual('total')" title="Ordenar por Total">TOTAL <span id="sort-icon-total" class="sort-icon">↕</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="mainTableBody">
+                            <tr><td colspan="7" class="py-4 text-slate-500 italic">Nenhum dado importado ainda. Suba os arquivos XML.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SEÇÃO CENTRAL & DIREITA -->
+            <div class="lg:col-span-6 space-y-6">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- TABELA DO MEIO (QTD. AUDITADA NO DIA) -->
+                    <div class="bg-white shadow-xl rounded-xl overflow-hidden border border-slate-300 flex flex-col">
+                        <div class="bg-blue-900 text-white py-2.5 px-3 text-center font-bold text-xs tracking-wide border-b border-blue-950">
+                            QTD. AUDITADA NO DIA (Meta: <span id="metaLabelDisplay">3900</span>)
+                        </div>
+                        <div class="overflow-y-auto max-h-[520px]">
+                            <table class="w-full excel-table border-collapse">
+                                <thead>
+                                    <tr>
+                                        <th>FILIAL</th>
+                                        <th>QTD</th>
+                                        <th>ROTAS</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="auditTableBody">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="bg-emerald-600 text-white font-bold text-center py-2.5 text-sm tracking-wide shadow-inner mt-auto border-t border-emerald-700">
+                            QTD. TOTAL AUDITADA NO DIA: <span id="totalAuditedValue">0</span>
+                        </div>
+                    </div>
+
+                    <!-- PAINEL À DIREITA -->
+                    <div class="space-y-4">
+                        <div class="bg-white shadow-xl rounded-xl p-4 border border-slate-300 space-y-3">
+                            <div class="bg-blue-900 text-white font-bold text-center py-2 text-xs rounded shadow">
+                                PEDIDO DO DIA
+                            </div>
+                            <div class="bg-red-600 text-white font-black text-center py-2 rounded text-lg tracking-wider shadow-md" id="mainOrderNum">
+                                ---
+                            </div>
+                            <div class="bg-slate-100 border border-slate-300 rounded-lg p-2 text-center">
+                                <span class="block text-[10px] font-bold text-slate-500 uppercase">Total Geral do Pedido</span>
+                                <span id="totalPedidoGeral" class="text-base font-extrabold text-blue-900">0</span>
+                            </div>
+                            
+                            <div class="space-y-2.5 pt-1 border-t border-slate-200">
+                                <label class="block text-xs font-bold text-slate-700 uppercase">Nº da Filial</label>
+                                <input type="number" id="inputFilialDireto" placeholder="Digite a filial..." class="w-full border border-slate-300 rounded-lg p-3 text-base font-bold focus:ring-2 focus:ring-blue-600 outline-none shadow-inner" onkeydown="if(event.key === 'Enter') executarAcaoDireta('inserir')">
+                                
+                                <div class="grid grid-cols-2 gap-3 pt-2">
+                                    <button onclick="executarAcaoDireta('inserir')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-4 px-3 rounded-xl shadow-md transition transform hover:-translate-y-0.5 uppercase text-sm tracking-wider flex flex-col items-center justify-center gap-1.5 border-b-4 border-emerald-800">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                                        Inserir
+                                    </button>
+                                    <button onclick="executarAcaoDireta('remover')" class="bg-red-500 hover:bg-red-600 text-white font-extrabold py-4 px-3 rounded-xl shadow-md transition transform hover:-translate-y-0.5 uppercase text-sm tracking-wider flex flex-col items-center justify-center gap-1.5 border-b-4 border-red-700">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20 12H4"/></svg>
+                                        Remover
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white shadow-md rounded-xl p-3 border border-slate-300 text-xs text-slate-600 space-y-2">
+                            <span class="block font-bold text-slate-700 uppercase">Gerenciamento Local (IndexedDB)</span>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="exportarJsonDia()" class="bg-blue-900 hover:bg-blue-950 text-white font-bold py-2.5 px-3 rounded-lg transition flex items-center justify-center gap-2 shadow text-xs tracking-wider uppercase" title="Criar Backup JSON do Dia">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                    Baixar Backup
+                                </button>
+                                <label class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 px-3 rounded-lg transition flex items-center justify-center gap-2 shadow text-xs tracking-wider uppercase cursor-pointer" title="Carregar Arquivo de Backup JSON">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                    Restaurar
+                                    <input type="file" id="jsonFileInputDireto" accept=".json" class="hidden" onchange="carregarArquivoJsonDireto(event)">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- LEGENDA: QTD. DE VEZES CONF. -->
+                <div class="bg-white shadow-xl rounded-xl overflow-hidden border border-slate-300 max-w-md">
+                    <div class="bg-blue-900 text-white py-2 px-3 text-center font-bold text-xs tracking-wide">
+                        QTD. DE VEZES CONF.
+                    </div>
+                    <table class="w-full excel-table border-collapse">
+                        <tbody>
+                            <tr>
+                                <td class="w-20 font-bold">1</td>
+                                <td class="text-left font-semibold px-4 bg-slate-50">VERDE</td>
+                                <td class="w-16 bg-conf-green"></td>
+                            </tr>
+                            <tr>
+                                <td class="font-bold">2</td>
+                                <td class="text-left font-semibold px-4 bg-slate-50">AMARELO</td>
+                                <td class="bg-conf-yellow"></td>
+                            </tr>
+                            <tr>
+                                <td class="font-bold">3</td>
+                                <td class="text-left font-semibold px-4 bg-slate-50">LARANJA</td>
+                                <td class="bg-conf-orange"></td>
+                            </tr>
+                            <tr>
+                                <td class="font-bold">4&gt;</td>
+                                <td class="text-left font-semibold px-4 bg-slate-50">VERMELHO</td>
+                                <td class="bg-conf-red"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+
+        </div>
+        
+        <!-- Rodapé / Créditos -->
+        <div class="mt-8 text-center text-xs text-slate-500 font-medium py-3 border-t border-slate-300">
+            Painel Operacional CD &bull; Desenvolvido por <strong class="text-blue-900">Luis Roberto Dos Anjos Braga</strong>
+        </div>
+    </div>
+
+    <!-- SCRIPT & LÓGICA -->
+    <script>
+        // ==========================================
+        // 1. SISTEMA DE BANCO DE DADOS (IndexedDB)
+        // ==========================================
+        const DB_NAME = 'PainelCD_Database';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'dadosLocais';
+
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onerror = (e) => reject("Erro IndexedDB");
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME);
+                    }
+                };
+            });
+        }
+
+        async function dbSet(key, value) {
+            const db = await initDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction([STORE_NAME], 'readwrite');
+                const store = tx.objectStore(STORE_NAME);
+                const req = store.put(value, key);
+                req.onsuccess = () => resolve();
+                req.onerror = () => reject();
+            });
+        }
+
+        async function dbGet(key) {
+            const db = await initDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction([STORE_NAME], 'readonly');
+                const store = tx.objectStore(STORE_NAME);
+                const req = store.get(key);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject();
+            });
+        }
+
+        async function dbRemove(key) {
+            const db = await initDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction([STORE_NAME], 'readwrite');
+                const store = tx.objectStore(STORE_NAME);
+                const req = store.delete(key);
+                req.onsuccess = () => resolve();
+                req.onerror = () => reject();
+            });
+        }
+
+        // ==========================================
+        // 2. VARIÁVEIS DE ESTADO
+        // ==========================================
+        let mainData = [];
+        let auditData = [];
+        let filiaisInseridasHoje = new Set();
+        let metaBatidaHoje = false;
+        let metaDiariaValor = 3900;
+        let historicoConfs = {}; 
+        let currentSortColumn = null;
+        let currentSortDirection = null;
+
+        const STORAGE_KEY_PREFIX = 'cd_mensal_confs_';
+
+        function getMesAnoAtual() {
+            const agora = new Date();
+            return `${agora.getFullYear()}_${agora.getMonth() + 1}`;
+        }
+
+        // ==========================================
+        // 3. FUNÇÕES DA INTERFACE (UI)
+        // ==========================================
+        function abrirModalNuvem() { document.getElementById('nuvemModal').classList.remove('hidden'); }
+        function fecharModalNuvem() { document.getElementById('nuvemModal').classList.add('hidden'); }
+        function fecharModalParabens() { document.getElementById('modalParabens').classList.add('hidden'); }
+        function closeAlert() { document.getElementById('alertBox').classList.add('hidden'); }
+
+        function showAlert(msg) {
+            const alertBox = document.getElementById('alertBox');
+            document.getElementById('alertMessage').innerText = msg;
+            alertBox.classList.remove('hidden');
+            setTimeout(() => { alertBox.classList.add('hidden'); }, 7000);
+        }
+
+        function getConfClass(count) {
+            if (count === 0) return ''; 
+            if (count === 1) return 'bg-conf-green';
+            if (count === 2) return 'bg-conf-yellow';
+            if (count === 3) return 'bg-conf-orange';
+            return 'bg-conf-red'; 
+        }
+
+        function atualizarIconesOrdenacao() {
+            document.querySelectorAll('.sort-icon').forEach(el => {
+                el.innerText = '↕';
+                el.classList.remove('active');
+            });
+            if (currentSortColumn) {
+                const icone = document.getElementById(`sort-icon-${currentSortColumn}`);
+                if (icone) {
+                    icone.innerText = currentSortDirection === 'asc' ? '▲' : '▼';
+                    icone.classList.add('active');
+                }
+            }
+        }
+
+        function aplicarOrdenacaoPadraoAutomatica() {
+            mainData.sort((a, b) => {
+                if (a.rota !== b.rota) return a.rota - b.rota; 
+                if (b.total !== a.total) return b.total - a.total; 
+                return b.filial - a.filial; 
+            });
+            currentSortColumn = 'rota'; 
+            currentSortDirection = 'asc';
+            atualizarIconesOrdenacao();
+        }
+
+        function sortTableManual(column) {
+            if (currentSortColumn === column) {
+                currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = column;
+                currentSortDirection = (column === 'rota' || column === 'filial') ? 'asc' : 'desc'; 
+            }
+
+            mainData.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+                if (valA < valB) return currentSortDirection === 'asc' ? -1 : 1;
+                if (valA > valB) return currentSortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+            
+            renderMainTable();
+            atualizarIconesOrdenacao();
+        }
+
+        function renderMainTable() {
+            const tbody = document.getElementById('mainTableBody');
+            
+            // Lógica da Barra de Pesquisa
+            const searchInput = document.getElementById('searchInput');
+            const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            
+            let filteredData = mainData;
+            
+            if (searchTerm !== '') {
+                filteredData = mainData.filter(row => 
+                    String(row.filial).toLowerCase().includes(searchTerm) || 
+                    String(row.rota).toLowerCase().includes(searchTerm)
+                );
+            }
+
+            document.getElementById('countFiliais').innerText = filteredData.length;
+            tbody.innerHTML = '';
+            
+            if (filteredData.length === 0) {
+                if (mainData.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-slate-500 italic">Nenhum dado importado ainda. Suba os arquivos XML.</td></tr>`;
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-slate-500 italic font-medium">Nenhuma filial encontrada para "${searchTerm}".</td></tr>`;
+                }
+                return;
+            }
+
+            filteredData.forEach(row => {
+                const tr = document.createElement('tr');
+                const colorClass = getConfClass(row.confCount);
+                tr.innerHTML = `
+                    <td>${row.rota}</td>
+                    <td class="${colorClass}">${row.filial}</td>
+                    <td>${row.pulmao}</td>
+                    <td>${row.volumoso}</td>
+                    <td>${row.fraldas}</td>
+                    <td>${row.linha}</td>
+                    <td class="font-bold bg-slate-50">${row.total}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderAuditTable() {
+            const tbody = document.getElementById('auditTableBody');
+            tbody.innerHTML = '';
+
+            if (auditData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" class="py-4 text-slate-400 italic">Nenhuma filial inserida hoje.</td></tr>`;
+                return;
+            }
+
+            auditData.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td class="font-bold">${item.filial}</td><td class="font-black text-blue-800">${item.qtd}</td><td>${item.rotas}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateTotalAudited() {
+            const total = auditData.reduce((acc, curr) => acc + curr.qtd, 0);
+            document.getElementById('totalAuditedValue').innerText = total;
+
+            if (total >= metaDiariaValor && !metaBatidaHoje) {
+                metaBatidaHoje = true;
+                dispararConfetesEParabens(total);
+            } else if (total < metaDiariaValor) {
+                metaBatidaHoje = false;
+            }
+        }
+
+        function atualizarTotalGeralPedido() {
+            const totalGeral = mainData.reduce((acc, curr) => acc + curr.total, 0);
+            document.getElementById('totalPedidoGeral').innerText = totalGeral.toLocaleString('pt-BR');
+        }
+
+        function dispararConfetesEParabens(total) {
+            document.getElementById('modalTotalValor').innerText = total;
+            document.getElementById('modalParabens').classList.remove('hidden');
+            if (typeof confetti === 'function') {
+                confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+            }
+        }
+
+        // ==========================================
+        // 4. LÓGICA DE DADOS (Salvar/Inserir)
+        // ==========================================
+        async function salvarPersistenciaLocal() {
+            try {
+                await dbSet('cd_persisted_mainData', mainData);
+                await dbSet('cd_persisted_auditData', auditData);
+                await dbSet('cd_persisted_orderNum', document.getElementById('mainOrderNum').innerText);
+                await dbSet('cd_persisted_cdName', document.getElementById('cdNameDisplay').innerText);
+                await dbSet('cd_persisted_fileNames', document.getElementById('fileNamesDisplay').innerText);
+                await dbSet('cd_persisted_filiaisInseridas', Array.from(filiaisInseridasHoje));
+            } catch(err) { console.error("Erro ao salvar no IndexedDB:", err); }
+        }
+
+        async function executarAcaoDireta(modo) {
+            const inputVal = document.getElementById('inputFilialDireto').value.trim();
+            const filialInput = parseInt(inputVal);
+
+            if (isNaN(filialInput)) {
+                showAlert("Por favor, digite o número de uma filial válida.");
+                return;
+            }
+
+            const index = mainData.findIndex(item => item.filial === filialInput);
+
+            if (modo === 'inserir') {
+                if (index >= 0) {
+                    if (filiaisInseridasHoje.has(filialInput)) {
+                        showAlert(`Atenção: A filial ${filialInput} já foi inserida hoje! Não é permitido repetir.`);
+                        return;
+                    }
+                    
+                    filiaisInseridasHoje.add(filialInput);
+                    const item = mainData[index];
+                    
+                    auditData.unshift({ 
+                        filial: item.filial, 
+                        qtd: item.total, 
+                        rotas: String(item.rota) 
+                    });
+
+                    historicoConfs[item.filial] = (historicoConfs[item.filial] || 0) + 1;
+                    await dbSet(STORAGE_KEY_PREFIX + getMesAnoAtual(), historicoConfs);
+                    
+                    item.confCount = historicoConfs[item.filial];
+
+                    renderAuditTable();
+                    renderMainTable();
+                    updateTotalAudited();
+                    salvarPersistenciaLocal();
+                    showAlert(`Filial ${filialInput} conferida com sucesso!`);
+                } else {
+                    showAlert(`Atenção: A filial ${filialInput} não foi encontrada no pedido.`);
+                }
+            } else if (modo === 'remover') {
+                if (filiaisInseridasHoje.has(filialInput)) {
+                    filiaisInseridasHoje.delete(filialInput);
+                    const item = mainData[index];
+                    
+                    let auditIndex = auditData.findIndex(a => a.filial === filialInput);
+                    if (auditIndex >= 0) {
+                        auditData.splice(auditIndex, 1);
+                    }
+
+                    if (historicoConfs[item.filial]) {
+                        historicoConfs[item.filial] -= 1;
+                        if (historicoConfs[item.filial] <= 0) delete historicoConfs[item.filial];
+                        await dbSet(STORAGE_KEY_PREFIX + getMesAnoAtual(), historicoConfs);
+                    }
+                    
+                    item.confCount = historicoConfs[item.filial] || 0;
+
+                    renderAuditTable();
+                    renderMainTable();
+                    updateTotalAudited();
+                    salvarPersistenciaLocal();
+                    showAlert(`Filial ${filialInput} removida e contagem revertida.`);
+                } else {
+                    showAlert(`A filial ${filialInput} não está na lista de hoje para ser removida.`);
+                }
+            }
+            document.getElementById('inputFilialDireto').value = '';
+            document.getElementById('inputFilialDireto').focus();
+        }
+
+        async function resetData() {
+            mainData = [];
+            auditData = [];
+            filiaisInseridasHoje.clear();
+            metaBatidaHoje = false;
+            historicoConfs = {};
+            currentSortColumn = null;
+            document.getElementById('searchInput').value = '';
+            
+            await dbRemove(STORAGE_KEY_PREFIX + getMesAnoAtual());
+            await dbRemove('cd_persisted_mainData');
+            await dbRemove('cd_persisted_auditData');
+            await dbRemove('cd_persisted_orderNum');
+            await dbRemove('cd_persisted_cdName');
+            await dbRemove('cd_persisted_fileNames');
+            await dbRemove('cd_persisted_filiaisInseridas');
+            
+            renderMainTable();
+            renderAuditTable();
+            updateTotalAudited();
+            atualizarIconesOrdenacao();
+            document.getElementById('totalPedidoGeral').innerText = '0';
+            document.getElementById('xmlFileInput').value = "";
+            document.getElementById('fileNamesDisplay').innerText = "Nenhum arquivo selecionado";
+            document.getElementById('cdNameDisplay').innerText = "";
+            showAlert("Sistema totalmente limpo.");
+        }
+
+        // ==========================================
+        // 5. PROCESSAMENTO DE XML
+        // ==========================================
+        function processarArquivosXML() {
+            const input = document.getElementById('xmlFileInput');
+            const files = input.files;
+            if (files.length === 0) return;
+
+            let nomesArr = Array.from(files).map(f => f.name);
+            document.getElementById('fileNamesDisplay').innerText = nomesArr.join(', ');
+            document.getElementById('fileNamesDisplay').classList.remove('italic', 'text-slate-500');
+            document.getElementById('fileNamesDisplay').classList.add('font-semibold', 'text-blue-700');
+
+            let arquivosLidos = 0;
+            const conteudosXML = [];
+
+            Array.from(files).forEach((file) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(e.target.result, "text/xml");
+                    conteudosXML.push({ nome: file.name.toUpperCase(), doc: xmlDoc });
+                    arquivosLidos++;
+                    if (arquivosLidos === files.length) {
+                        extrairDadosDoXML(conteudosXML);
+                    }
+                };
+                reader.readAsText(file, 'windows-1252');
+            });
+        }
+
+        async function extrairDadosDoXML(listaXML) {
+            let xmlPedido = null;
+            let xmlPulmao = null;
+
+            listaXML.forEach(arquivo => {
+                if (arquivo.nome.includes("PULMAO") || arquivo.nome.includes("PULMÃO")) {
+                    xmlPulmao = arquivo.doc;
+                } else {
+                    xmlPedido = arquivo.doc;
+                }
+            });
+
+            if (!xmlPedido) xmlPedido = listaXML[0].doc;
+
+            let cdDetectado = null;
+            const todasTagsPedido = xmlPedido.getElementsByTagName('*');
+            for (let i = 0; i < todasTagsPedido.length; i++) {
+                let tag = todasTagsPedido[i];
+                for (let j = 0; j < tag.attributes.length; j++) {
+                    let attrName = tag.attributes[j].name.toUpperCase();
+                    let attrVal = tag.attributes[j].value.trim();
+                    if (attrName === 'CD' || attrName === 'DEPOSITO' || attrName === 'DEP' || attrName.includes('CD_') || attrName.includes('DEPOSITO')) {
+                        let matchNum = attrVal.match(/(\d+)/);
+                        if (matchNum) {
+                            cdDetectado = ` - ${matchNum[1]}`;
+                            break;
+                        } else if (attrVal) {
+                            cdDetectado = ` - ${attrVal}`;
+                            break;
+                        }
+                    }
+                }
+                if (cdDetectado) break;
+            }
+
+            if (cdDetectado) document.getElementById('cdNameDisplay').innerText = cdDetectado;
+
+            const pulmaoMap = new Map();
+            if (xmlPulmao) {
+                const details2List = xmlPulmao.getElementsByTagName('*');
+                for (let i = 0; i < details2List.length; i++) {
+                    let node = details2List[i];
+                    if (node.nodeName.toUpperCase().includes("DETAILS2")) {
+                        let filiStr = null, qtdStr = null;
+                        for (let j = 0; j < node.attributes.length; j++) {
+                            let attr = node.attributes[j];
+                            let name = attr.name.toUpperCase();
+                            if (name === 'FILI_CD_FILIAL' || name === 'FILIAL') filiStr = attr.value;
+                            if (name === 'QUANTIDADE' || name === 'QTD') qtdStr = attr.value;
+                        }
+                        if (filiStr) {
+                            let filial = parseInt(filiStr);
+                            let qtd = qtdStr ? parseFloat(qtdStr.replace(',', '.')) : 0;
+                            if (!isNaN(filial)) {
+                                pulmaoMap.set(filial, (pulmaoMap.get(filial) || 0) + qtd);
+                            }
+                        }
+                    }
+                }
+            }
+
+            const filiaisMap = new Map();
+            const todasTags = xmlPedido.getElementsByTagName('*');
+            let linhasParaProcessar = [];
+
+            for (let i = 0; i < todasTags.length; i++) {
+                let nome = todasTags[i].nodeName.toUpperCase();
+                if (nome.includes('DETALHES') || nome.includes('ROW') || nome.includes('REGISTRO')) {
+                    if (todasTags[i].attributes.length > 0) linhasParaProcessar.push(todasTags[i]);
+                }
+            }
+
+            if (linhasParaProcessar.length === 0) {
+                for (let i = 0; i < todasTags.length; i++) {
+                    for (let j = 0; j < todasTags[i].attributes.length; j++) {
+                        let attrName = todasTags[i].attributes[j].name.toUpperCase();
+                        if (attrName === 'FILIAL' || attrName === 'FILI_CD_FILIAL') {
+                            linhasParaProcessar.push(todasTags[i]);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (linhasParaProcessar.length === 0) {
+                showAlert("Erro: Nenhuma tag com dados de filial encontrada no XML.");
+                return;
+            }
+
+            let numPedidoDetectado = "---";
+            let sequencialDetectado = "---";
+
+            linhasParaProcessar.forEach(linha => {
+                let filialStr = null, rotaStr = null, zonaStr = null, pedidoStr = null, sequencialStr = null;
+                for (let j = 0; j < linha.attributes.length; j++) {
+                    let attr = linha.attributes[j];
+                    let name = attr.name.toUpperCase();
+                    if (name === 'FILIAL' || name === 'LOJA' || name === 'CODIGO_FILIAL') filialStr = attr.value;
+                    if (name === 'ROTA' || name === 'ROTAS' || name === 'NUM_ROTA') rotaStr = attr.value;
+                    if (name.includes('ZONA') || name.includes('DESCRICAO_ZONA')) zonaStr = attr.value;
+                    if (name === 'PEDIDO' || name === 'NUM_PEDIDO') pedidoStr = attr.value;
+                    if (name === 'SEQUENCIAL' || name === 'SEQ' || name === 'NUM_SEQUENCIAL') sequencialStr = attr.value;
+                }
+
+                if (pedidoStr && numPedidoDetectado === "---") numPedidoDetectado = pedidoStr;
+                if (sequencialStr && sequencialDetectado === "---") sequencialDetectado = sequencialStr;
+                if (!filialStr) return;
+                let filial = parseInt(filialStr);
+                if (isNaN(filial)) return;
+
+                let rota = rotaStr ? parseInt(rotaStr) : 9999;
+                let zona = zonaStr ? zonaStr.toUpperCase() : "";
+
+                if (!filiaisMap.has(filial)) {
+                    filiaisMap.set(filial, {
+                        rota: rota, filial: filial,
+                        pulmao: pulmaoMap.get(filial) || 0,
+                        volumoso: 0, fraldas: 0, linha: 0, total: 0, confCount: 0
+                    });
+                } else {
+                    let dados = filiaisMap.get(filial);
+                    if (rota !== 9999) dados.rota = rota;
+                    if (dados.pulmao === 0 && pulmaoMap.has(filial)) dados.pulmao = pulmaoMap.get(filial);
+                }
+
+                const dadosFilial = filiaisMap.get(filial);
+                
+                let qtdLinha = 1;
+                for (let j = 0; j < linha.attributes.length; j++) {
+                    let attrName = linha.attributes[j].name.toUpperCase();
+                    if (attrName.includes('QTD') || attrName.includes('QUANTIDADE') || attrName.includes('VOL') || attrName.includes('QTDE')) {
+                        let valQtd = parseFloat(linha.attributes[j].value.replace(',', '.'));
+                        if (!isNaN(valQtd) && valQtd > 0) {
+                            qtdLinha = valQtd;
+                            break;
+                        }
+                    }
+                }
+
+                if (zona.includes("VOLU SSA 01") || zona.includes("VOLUMOSO")) dadosFilial.volumoso += qtdLinha;
+                else if (zona.includes("FRALDA SSA 01") || zona.includes("FRALDA")) dadosFilial.fraldas += qtdLinha;
+                else dadosFilial.linha += qtdLinha;
+            });
+
+            historicoConfs = await dbGet(STORAGE_KEY_PREFIX + getMesAnoAtual()) || {};
+
+            mainData = [];
+            filiaisMap.forEach((dados) => {
+                dados.volumoso = Math.round(dados.volumoso);
+                dados.fraldas = Math.round(dados.fraldas);
+                dados.linha = Math.round(dados.linha);
+                dados.pulmao = Math.round(dados.pulmao);
+                dados.total = dados.pulmao + dados.volumoso + dados.fraldas + dados.linha;
+
+                if (historicoConfs[dados.filial]) dados.confCount = historicoConfs[dados.filial];
+                if (dados.total > 0) mainData.push(dados);
+            });
+
+            document.getElementById('searchInput').value = ''; 
+            aplicarOrdenacaoPadraoAutomatica();
+
+            auditData = [];
+            filiaisInseridasHoje.clear();
+            metaBatidaHoje = false;
+
+            let displayFinalPedido = numPedidoDetectado;
+            if (sequencialDetectado !== "---") {
+                displayFinalPedido = `${numPedidoDetectado} - ${sequencialDetectado}`;
+            }
+            document.getElementById('mainOrderNum').innerText = displayFinalPedido;
+            
+            renderMainTable();
+            renderAuditTable();
+            updateTotalAudited();
+            atualizarTotalGeralPedido();
+            
+            salvarPersistenciaLocal();
+
+            showAlert(`Sucesso! ${mainData.length} filiais carregadas e ordenadas.`);
+        }
+
+        // ==========================================
+        // 6. FUNÇÕES EXTRAS E EASTER EGG
+        // ==========================================
+        let bufferTeclado = '';
+        window.addEventListener('keydown', (e) => {
+            bufferTeclado += e.key.toLowerCase();
+            if (bufferTeclado.length > 10) bufferTeclado = bufferTeclado.slice(-10);
+            if (bufferTeclado.includes('luis')) {
+                bufferTeclado = '';
+                abrirModalLuis();
+            }
+        });
+
+        function abrirModalLuis() { document.getElementById('modalLuis').classList.remove('hidden'); }
+        function fecharModalLuis() { document.getElementById('modalLuis').classList.add('hidden'); }
+
+        function aplicarNovaMeta() {
+            const val = parseInt(document.getElementById('inputNovaMeta').value);
+            if (isNaN(val) || val <= 0) {
+                showAlert("Digite um valor válido para a meta.");
+                return;
+            }
+            metaDiariaValor = val;
+            document.getElementById('metaAtualDisplay').innerText = metaDiariaValor;
+            const topoDisplay = document.getElementById('metaTopoDisplay');
+            if (topoDisplay) topoDisplay.innerText = metaDiariaValor.toLocaleString('pt-BR');
+            document.getElementById('inputNovaMeta').value = '';
+            showAlert(`Meta diária atualizada para ${metaDiariaValor} unidades!`);
+            fecharModalLuis();
+            updateTotalAudited();
+        }
+
+        async function executarFuncaoEspecial(acao) {
+            if (acao === 'marcarTodas') {
+                historicoConfs = await dbGet(STORAGE_KEY_PREFIX + getMesAnoAtual()) || {};
+                mainData.forEach(item => {
+                    if (!filiaisInseridasHoje.has(item.filial)) {
+                        filiaisInseridasHoje.add(item.filial);
+                        auditData.unshift({ filial: item.filial, qtd: item.total, rotas: String(item.rota) });
+                        historicoConfs[item.filial] = (historicoConfs[item.filial] || 0) + 1;
+                        item.confCount = historicoConfs[item.filial];
+                    }
+                });
+                await dbSet(STORAGE_KEY_PREFIX + getMesAnoAtual(), historicoConfs);
+                renderMainTable();
+                renderAuditTable();
+                updateTotalAudited();
+                salvarPersistenciaLocal();
+                showAlert("Todas as filiais foram inseridas!");
+                fecharModalLuis();
+            } else if (acao === 'forcarMeta') {
+                dispararConfetesEParabens(document.getElementById('totalAuditedValue').innerText || metaDiariaValor);
+                fecharModalLuis();
+            } else if (acao === 'limparDados') {
+                resetData();
+                fecharModalLuis();
+            }
+        }
+
+        function exportarJsonDia() {
+            const relatorio = {
+                dataGeracao: new Date().toISOString(),
+                pedido: document.getElementById('mainOrderNum').innerText,
+                cd: document.getElementById('cdNameDisplay').innerText,
+                totalAudited: document.getElementById('totalAuditedValue').innerText,
+                mainData: mainData,
+                auditData: auditData
+            };
+            const dadosStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(relatorio, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dadosStr);
+            downloadAnchor.setAttribute("download", `relatorio_cd_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showAlert("JSON do dia gerado e baixado com sucesso!");
+        }
+
+        async function carregarArquivoJsonDireto(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.mainData) mainData = parsed.mainData;
+                    if (parsed.auditData) auditData = parsed.auditData;
+                    if (parsed.pedido) document.getElementById('mainOrderNum').innerText = parsed.pedido;
+                    if (parsed.cd) document.getElementById('cdNameDisplay').innerText = parsed.cd;
+                    
+                    filiaisInseridasHoje.clear();
+                    auditData.forEach(a => filiaisInseridasHoje.add(a.filial));
+
+                    aplicarOrdenacaoPadraoAutomatica();
+                    document.getElementById('searchInput').value = '';
+                    renderAuditTable();
+                    updateTotalAudited();
+                    atualizarTotalGeralPedido();
+                    await salvarPersistenciaLocal();
+                    showAlert("Backup restaurado com sucesso!");
+                } catch(err) {
+                    console.error(err);
+                    showAlert("Erro ao processar arquivo JSON.");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function liberarLojaManual() {
+            const inputVal = document.getElementById('inputCorrigirLoja').value.trim();
+            const filialNum = parseInt(inputVal);
+            if (isNaN(filialNum)) {
+                showAlert("Digite o número de uma filial válida para corrigir.");
+                return;
+            }
+            document.getElementById('inputFilialDireto').value = filialNum;
+            executarAcaoDireta('remover');
+            fecharModalLuis();
+        }
+
+        // ==========================================
+        // 7. INICIALIZAÇÃO DA PÁGINA (Async/IndexedDB)
+        // ==========================================
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                if (localStorage.getItem('cd_persisted_mainData') && !(await dbGet('migracao_concluida'))) {
+                    await dbSet('cd_persisted_mainData', JSON.parse(localStorage.getItem('cd_persisted_mainData')));
+                    await dbSet('cd_persisted_auditData', JSON.parse(localStorage.getItem('cd_persisted_auditData')));
+                    await dbSet('cd_persisted_orderNum', localStorage.getItem('cd_persisted_orderNum'));
+                    await dbSet('cd_persisted_cdName', localStorage.getItem('cd_persisted_cdName'));
+                    await dbSet('cd_persisted_fileNames', localStorage.getItem('cd_persisted_fileNames'));
+                    await dbSet('cd_persisted_filiaisInseridas', JSON.parse(localStorage.getItem('cd_persisted_filiaisInseridas') || "[]"));
+                    
+                    const histLocal = localStorage.getItem(STORAGE_KEY_PREFIX + getMesAnoAtual());
+                    if (histLocal) await dbSet(STORAGE_KEY_PREFIX + getMesAnoAtual(), JSON.parse(histLocal));
+                    
+                    await dbSet('migracao_concluida', true);
+                    localStorage.clear(); 
+                }
+
+                historicoConfs = await dbGet(STORAGE_KEY_PREFIX + getMesAnoAtual()) || {};
+
+                const savedMain = await dbGet('cd_persisted_mainData');
+                const savedAudit = await dbGet('cd_persisted_auditData');
+                const savedOrder = await dbGet('cd_persisted_orderNum');
+                const savedCd = await dbGet('cd_persisted_cdName');
+                const savedFiles = await dbGet('cd_persisted_fileNames');
+                const savedFiliaisIns = await dbGet('cd_persisted_filiaisInseridas');
+
+                if (savedMain) mainData = savedMain;
+                if (savedAudit) auditData = savedAudit;
+                if (savedOrder && savedOrder !== "---") document.getElementById('mainOrderNum').innerText = savedOrder;
+                if (savedCd) document.getElementById('cdNameDisplay').innerText = savedCd;
+                if (savedFiles && savedFiles !== "Nenhum arquivo selecionado") {
+                    const fd = document.getElementById('fileNamesDisplay');
+                    fd.innerText = savedFiles;
+                    fd.classList.remove('italic', 'text-slate-500');
+                    fd.classList.add('font-semibold', 'text-blue-700');
+                }
+                if (savedFiliaisIns) filiaisInseridasHoje = new Set(savedFiliaisIns);
+                
+                mainData.forEach(item => {
+                    item.confCount = historicoConfs[item.filial] || 0;
+                });
+                
+                if (mainData.length > 0) aplicarOrdenacaoPadraoAutomatica();
+
+            } catch(e) {
+                console.error("Erro na inicialização do IndexedDB:", e);
+            }
+
+            renderMainTable();
+            renderAuditTable();
+            updateTotalAudited();
+            atualizarTotalGeralPedido();
+            atualizarIconesOrdenacao();
+        });
+    </script>
+
+    <!-- MODAL NUVEM -->
+    <div id="nuvemModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200">
+            <div class="bg-emerald-800 text-white p-4 flex justify-between items-center">
+                <h3 class="font-bold text-base uppercase tracking-wider">Bases de Dados na Nuvem</h3>
+                <button onclick="fecharModalNuvem()" class="text-white hover:text-slate-200 text-xl font-bold px-2">&times;</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <a href="https://relatorios.pmenos.com.br/portal/report/Cosmos/Log%C3%ADstica/Pedido_CD" target="_blank" onclick="fecharModalNuvem()" class="block w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-4 rounded-xl shadow text-center text-sm uppercase">PEDIDO CD SEM PULMÃO</a>
+                <a href="https://relatorios.pmenos.com.br/portal/report/Cosmos/Log%C3%ADstica/PedidoPulmaoDetalhado" target="_blank" onclick="fecharModalNuvem()" class="block w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3 px-4 rounded-xl shadow text-center text-sm uppercase">PEDIDO PULMÃO</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PARABÉNS -->
+    <div id="modalParabens" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border-4 border-emerald-500 text-center p-8 space-y-6">
+            <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-4xl shadow-inner">🎉</div>
+            <div class="space-y-2">
+                <h2 class="text-2xl font-black text-emerald-800 uppercase">Parabéns à Equipe!</h2>
+                <p class="text-slate-600 text-sm">Meta diária atingida com sucesso! 🚀💪</p>
+                <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-900 font-bold text-lg">
+                    Total Auditado: <span id="modalTotalValor">0</span> unidades
+                </div>
+            </div>
+            <button onclick="fecharModalParabens()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 px-6 rounded-2xl shadow-lg uppercase text-sm">Continuar Operação 🎯</button>
+        </div>
+    </div>
+
+    <!-- MODAL FUNÇÕES ESPECIAIS -->
+    <div id="modalLuis" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white border-2 border-black rounded-none shadow-2xl max-w-md w-full overflow-hidden text-black font-sans">
+            <div class="bg-black text-white px-6 py-4 flex justify-between items-center border-b border-black">
+                <h3 class="font-bold text-sm uppercase tracking-widest">Painel Administrativo</h3>
+                <button onclick="fecharModalLuis()" class="text-white hover:text-gray-300 text-lg font-bold px-2">&times;</button>
+            </div>
+            <div class="p-6 space-y-5">
+                <div class="bg-gray-100 border border-black p-4 space-y-2">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-black">Alterar Meta Diária (Atual: <span id="metaAtualDisplay">3900</span>)</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="inputNovaMeta" placeholder="Nova meta..." class="flex-grow bg-white border border-black px-3 py-2 text-sm text-black font-bold focus:outline-none focus:ring-1 focus:ring-black">
+                        <button onclick="aplicarNovaMeta()" class="bg-black hover:bg-gray-800 text-white font-bold px-4 py-2 text-xs uppercase tracking-wider transition">Aplicar</button>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <span class="block text-xs font-bold uppercase tracking-wider text-black">Ações do Sistema</span>
+                    <button onclick="executarFuncaoEspecial('marcarTodas')" class="w-full text-left bg-white hover:bg-gray-100 border border-black text-black font-semibold py-2 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
+                        <span>Marcar Todas como Conferidas (Hoje)</span>
+                        <span>[OK]</span>
+                    </button>
+                    
+                    <div class="bg-gray-100 border border-black p-3 space-y-2">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-black">Liberar / Corrigir Loja Específica</label>
+                        <div class="flex gap-2">
+                            <input type="number" id="inputCorrigirLoja" placeholder="Nº da loja..." class="flex-grow bg-white border border-black px-2 py-1.5 text-xs text-black font-bold focus:outline-none">
+                            <button onclick="liberarLojaManual()" class="bg-black hover:bg-gray-800 text-white font-bold px-3 py-1.5 text-xs uppercase tracking-wider transition">Remover do Dia</button>
+                        </div>
+                        <p class="text-[10px] text-gray-600">Simula o botão Remover da tela principal.</p>
+                    </div>
+                    <button onclick="executarFuncaoEspecial('forcarMeta')" class="w-full text-left bg-gray-100 hover:bg-gray-200 border border-black text-black font-semibold py-2.5 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
+                        <span>Forçar Disparo de Meta Atingida</span>
+                        <span>[TEST]</span>
+                    </button>
+                    <button onclick="executarFuncaoEspecial('limparDados')" class="w-full text-left bg-red-100 hover:bg-red-200 border border-red-800 text-red-900 font-bold py-2.5 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
+                        <span>Limpar Todos os Dados</span>
+                        <span>[RESET]</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-gray-100 px-6 py-3 border-t border-black flex justify-end">
+                <button onclick="fecharModalLuis()" class="bg-black hover:bg-gray-800 text-white font-bold px-5 py-2 text-xs uppercase tracking-wider transition">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
