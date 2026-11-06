@@ -1,3 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projeto name="painel_blitz" author="Luis Roberto dos Anjos Braga">
+    <descricao>Painel Operacional CD - Pague Menos CD04 (Código Completo Definitivo)</descricao>
+    <arquivo nome="index.html" tipo="text/html">
+<![CDATA[
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -219,6 +224,7 @@
     <script>
         let mainData = [];
         let auditData = [];
+        let filiaisInseridasHoje = new Set();
         let metaBatidaHoje = false;
 
         const STORAGE_KEY_PREFIX = 'cd_mensal_confs_';
@@ -240,8 +246,7 @@
         function sincronizarCoresComHistorico() {
             const historicoConfs = carregarHistoricoConferenciasMensal();
             mainData.forEach(item => {
-                // Busca normalizada por string ou número no objeto do histórico
-                item.confCount = historicoConfs[item.filial] || historicoConfs[String(item.filial)] || 0;
+                item.confCount = historicoConfs[item.filial] || 0;
             });
         }
 
@@ -342,6 +347,7 @@
                 localStorage.setItem('cd_persisted_orderNum', document.getElementById('mainOrderNum').innerText);
                 localStorage.setItem('cd_persisted_cdName', document.getElementById('cdNameDisplay').innerText);
                 localStorage.setItem('cd_persisted_fileNames', document.getElementById('fileNamesDisplay').innerText);
+                localStorage.setItem('cd_persisted_filiaisInseridas', JSON.stringify(Array.from(filiaisInseridasHoje)));
             } catch(err) { console.error(err); }
         }
 
@@ -358,13 +364,14 @@
 
             if (modo === 'inserir') {
                 if (index >= 0) {
-                    // Evitar duplicatas no mesmo lote de auditoria atual
+                    // Verificação rigorosa: se a filial já está na tabela de auditoria atual (auditData), não permitir duplicar no mesmo lote
                     if (auditData.some(a => a.filial === filialInput)) {
                         showAlert(`Atenção: A filial ${filialInput} já está na lista de auditoria deste turno!`);
                         return;
                     }
                     
                     const item = mainData[index];
+                    
                     auditData.unshift({ 
                         filial: item.filial, 
                         qtd: item.total, 
@@ -414,20 +421,21 @@
             
             const historicoConfs = carregarHistoricoConferenciasMensal();
             
-            // Incrementar APENAS as lojas presentes na tabela de auditoria atual (auditData) exatamente UMA vez
+            // Incrementar APENAS as lojas presentes na tabela de auditoria atual (auditData) exatamente UMA vez por salvamento
             auditData.forEach(item => {
-                const chave = String(item.filial);
-                historicoConfs[chave] = (historicoConfs[chave] || historicoConfs[item.filial] || 0) + 1;
+                historicoConfs[item.filial] = (historicoConfs[item.filial] || 0) + 1;
             });
             
             const mesAno = getMesAnoAtual();
             localStorage.setItem(STORAGE_KEY_PREFIX + mesAno, JSON.stringify(historicoConfs));
             
-            // Limpeza rigorosa do auditData após salvar com sucesso
+            sincronizarCoresComHistorico();
+            
+            // Esvaziar completamente o auditData após salvar com sucesso, preparando a tela para o próximo turno
             auditData = [];
+            
             localStorage.removeItem('cd_persisted_auditData');
             
-            sincronizarCoresComHistorico();
             salvarPersistenciaLocal();
             renderMainTable();
             renderAuditTable();
@@ -438,6 +446,7 @@
         function resetData() {
             mainData = [];
             auditData = [];
+            filiaisInseridasHoje.clear();
             metaBatidaHoje = false;
             localStorage.removeItem(STORAGE_KEY_PREFIX + getMesAnoAtual());
             localStorage.removeItem('cd_persisted_mainData');
@@ -445,6 +454,7 @@
             localStorage.removeItem('cd_persisted_orderNum');
             localStorage.removeItem('cd_persisted_cdName');
             localStorage.removeItem('cd_persisted_fileNames');
+            localStorage.removeItem('cd_persisted_filiaisInseridas');
             
             renderMainTable();
             renderAuditTable();
@@ -645,6 +655,7 @@
             sincronizarCoresComHistorico();
 
             auditData = [];
+            filiaisInseridasHoje.clear();
             metaBatidaHoje = false;
 
             let displayFinalPedido = numPedidoDetectado;
@@ -812,14 +823,9 @@
 
             let liberou = false;
 
+            const item = mainData.find(i => i.filial === filialNum);
             const historicoConfs = carregarHistoricoConferenciasMensal();
-            const chave = String(filialNum);
-            if (historicoConfs[chave] && historicoConfs[chave] > 0) {
-                historicoConfs[chave] -= 1;
-                const mesAno = getMesAnoAtual();
-                localStorage.setItem(STORAGE_KEY_PREFIX + mesAno, JSON.stringify(historicoConfs));
-                liberou = true;
-            } else if (historicoConfs[filialNum] && historicoConfs[filialNum] > 0) {
+            if (historicoConfs[filialNum] && historicoConfs[filialNum] > 0) {
                 historicoConfs[filialNum] -= 1;
                 const mesAno = getMesAnoAtual();
                 localStorage.setItem(STORAGE_KEY_PREFIX + mesAno, JSON.stringify(historicoConfs));
@@ -997,3 +1003,7 @@
 
 </body>
 </html>
+
+]]>
+    </arquivo>
+</projeto>
