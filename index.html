@@ -154,6 +154,22 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- BOTÕES DE BACKUP SEPARADOS E ESTILIZADOS -->
+                        <div class="bg-white shadow-md rounded-xl p-3 border border-slate-300 text-xs text-slate-600 space-y-2">
+                            <span class="block font-bold text-slate-700 uppercase">Gerenciamento de Backup</span>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="exportarJsonDia()" class="bg-blue-900 hover:bg-blue-950 text-white font-bold py-2.5 px-3 rounded-lg transition flex items-center justify-center gap-2 shadow text-xs tracking-wider uppercase" title="Criar Backup JSON do Dia">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                    Gerar Backup
+                                </button>
+                                <label class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 px-3 rounded-lg transition flex items-center justify-center gap-2 shadow text-xs tracking-wider uppercase cursor-pointer" title="Carregar Arquivo de Backup JSON">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                    Carregar
+                                    <input type="file" id="jsonFileInputDireto" accept=".json" class="hidden" onchange="carregarArquivoJsonDireto(event)">
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                 </div>
@@ -205,7 +221,6 @@
         let auditData = [];
         let filiaisInseridasHoje = new Set();
         let metaBatidaHoje = false;
-        let metaDiariaValor = 3900;
 
         const STORAGE_KEY_PREFIX = 'cd_mensal_confs_';
 
@@ -221,15 +236,6 @@
                 try { return JSON.parse(salvo); } catch(e) { console.error(e); }
             }
             return {};
-        }
-
-        function salvarHistoricoConferenciasMensal() {
-            const mesAno = getMesAnoAtual();
-            const mapaConfs = {};
-            mainData.forEach(item => {
-                if (item.confCount > 0) mapaConfs[item.filial] = item.confCount;
-            });
-            localStorage.setItem(STORAGE_KEY_PREFIX + mesAno, JSON.stringify(mapaConfs));
         }
 
         function abrirModalNuvem() { document.getElementById('nuvemModal').classList.remove('hidden'); }
@@ -297,11 +303,8 @@
         function updateTotalAudited() {
             const total = auditData.reduce((acc, curr) => acc + curr.qtd, 0);
             document.getElementById('totalAuditedValue').innerText = total;
-            
-            const labelMeta = document.getElementById('metaLabelDisplay');
-            if (labelMeta) labelMeta.innerText = metaDiariaValor;
 
-            if (total >= metaDiariaValor) {
+            if (total >= 3900) {
                 if (!metaBatidaHoje) {
                     metaBatidaHoje = true;
                     dispararConfetesEParabens(total);
@@ -324,6 +327,17 @@
             }
         }
 
+        function salvarPersistenciaLocal() {
+            try {
+                localStorage.setItem('cd_persisted_mainData', JSON.stringify(mainData));
+                localStorage.setItem('cd_persisted_auditData', JSON.stringify(auditData));
+                localStorage.setItem('cd_persisted_orderNum', document.getElementById('mainOrderNum').innerText);
+                localStorage.setItem('cd_persisted_cdName', document.getElementById('cdNameDisplay').innerText);
+                localStorage.setItem('cd_persisted_fileNames', document.getElementById('fileNamesDisplay').innerText);
+                localStorage.setItem('cd_persisted_filiaisInseridas', JSON.stringify(Array.from(filiaisInseridasHoje)));
+            } catch(err) { console.error(err); }
+        }
+
         function executarAcaoDireta(modo) {
             const inputVal = document.getElementById('inputFilialDireto').value.trim();
             const filialInput = parseInt(inputVal);
@@ -342,18 +356,20 @@
                         return;
                     }
                     filiaisInseridasHoje.add(filialInput);
+                    jaSalvoNesteTurno = false; 
                     const item = mainData[index];
-                    let auditIndex = auditData.findIndex(a => a.filial === item.filial);
-                    if (auditIndex >= 0) {
-                        auditData[auditIndex].qtd += item.total;
-                        if (!auditData[auditIndex].rotas.includes(item.rota)) {
-                            auditData[auditIndex].rotas += `, ${item.rota}`;
-                        }
-                    } else {
-                        auditData.unshift({ filial: item.filial, qtd: item.total, rotas: String(item.rota) });
-                    }
+                    
+                    auditData = auditData.filter(a => a.filial !== item.filial);
+                    
+                    auditData.unshift({ 
+                        filial: item.filial, 
+                        qtd: item.total, 
+                        rotas: String(item.rota) 
+                    });
+
                     renderAuditTable();
                     updateTotalAudited();
+                    salvarPersistenciaLocal();
                     showAlert(`Filial ${filialInput} inserida!`);
                 } else {
                     showAlert(`Atenção: A filial ${filialInput} não foi encontrada no pedido.`);
@@ -369,6 +385,7 @@
                     }
                     renderAuditTable();
                     updateTotalAudited();
+                    salvarPersistenciaLocal();
                     showAlert(`Filial ${filialInput} removida.`);
                 } else {
                     showAlert(`A filial ${filialInput} não está na lista de hoje.`);
@@ -378,21 +395,53 @@
             document.getElementById('inputFilialDireto').focus();
         }
 
+        let jaSalvoNesteTurno = false;
+
         function salvarDia() {
-            if (filiaisInseridasHoje.size === 0) {
+            if (filiaisInseridasHoje.size === 0 && auditData.length === 0) {
                 showAlert("Nenhuma filial inserida para salvar hoje.");
                 return;
             }
+
+            if (jaSalvoNesteTurno) {
+                showAlert("Este turno já foi salvo. Para novos lançamentos, insira novas lojas.");
+                return;
+            }
+            
+            try {
+                const backupState = {
+                    mainData: JSON.parse(JSON.stringify(mainData)),
+                    auditData: JSON.parse(JSON.stringify(auditData)),
+                    filiaisInseridas: Array.from(filiaisInseridasHoje),
+                    mesAno: getMesAnoAtual(),
+                    historicoMensal: carregarHistoricoConferenciasMensal()
+                };
+                localStorage.setItem('cd_backup_ultimo_salvar', JSON.stringify(backupState));
+            } catch(e) { console.error(e); }
+            
+            const historicoConfs = carregarHistoricoConferenciasMensal();
+            
             filiaisInseridasHoje.forEach(filialNum => {
-                const item = mainData.find(i => i.filial === filialNum);
-                if (item) item.confCount += 1;
+                historicoConfs[filialNum] = (historicoConfs[filialNum] || 0) + 1;
             });
-            filiaisInseridasHoje.clear();
-            salvarHistoricoConferenciasMensal();
+            
+            const mesAno = getMesAnoAtual();
+            localStorage.setItem(STORAGE_KEY_PREFIX + mesAno, JSON.stringify(historicoConfs));
+            
+            mainData.forEach(item => {
+                item.confCount = historicoConfs[item.filial] || 0;
+            });
+            
+            jaSalvoNesteTurno = true;
+            auditData = [];
+            
+            localStorage.removeItem('cd_persisted_auditData');
+            
+            salvarPersistenciaLocal();
             renderMainTable();
             renderAuditTable();
             updateTotalAudited();
-            showAlert("Dia salvo com sucesso!");
+            showAlert("Dia salvo com sucesso! Contagens computadas sem duplicação.");
         }
 
         function resetData() {
@@ -401,6 +450,13 @@
             filiaisInseridasHoje.clear();
             metaBatidaHoje = false;
             localStorage.removeItem(STORAGE_KEY_PREFIX + getMesAnoAtual());
+            localStorage.removeItem('cd_persisted_mainData');
+            localStorage.removeItem('cd_persisted_auditData');
+            localStorage.removeItem('cd_persisted_orderNum');
+            localStorage.removeItem('cd_persisted_cdName');
+            localStorage.removeItem('cd_persisted_fileNames');
+            localStorage.removeItem('cd_persisted_filiaisInseridas');
+            
             renderMainTable();
             renderAuditTable();
             updateTotalAudited();
@@ -594,7 +650,7 @@
                 dados.pulmao = Math.round(dados.pulmao);
                 dados.total = dados.pulmao + dados.volumoso + dados.fraldas + dados.linha;
 
-                if (historicoConfs[dados.filial]) dados.confCount = historicoConfs[dados.filial];
+                dados.confCount = historicoConfs[dados.filial] || 0;
                 if (dados.total > 0) mainData.push(dados);
             });
 
@@ -602,6 +658,7 @@
             auditData = [];
             filiaisInseridasHoje.clear();
             metaBatidaHoje = false;
+            jaSalvoNesteTurno = false;
 
             let displayFinalPedido = numPedidoDetectado;
             if (sequencialDetectado !== "---") {
@@ -612,10 +669,12 @@
             renderAuditTable();
             updateTotalAudited();
             atualizarTotalGeralPedido();
+            
+            salvarPersistenciaLocal();
+
             showAlert(`Sucesso! ${mainData.length} filiais carregadas.`);
         }
 
-        // Easter Egg: Digitar 'luis' no teclado abre o painel especial (global)
         let bufferTeclado = '';
         window.addEventListener('keydown', (e) => {
             bufferTeclado += e.key.toLowerCase();
@@ -632,6 +691,8 @@
         function fecharModalLuis() {
             document.getElementById('modalLuis').classList.add('hidden');
         }
+
+        let metaDiariaValor = 3900;
 
         function aplicarNovaMeta() {
             const val = parseInt(document.getElementById('inputNovaMeta').value);
@@ -660,25 +721,202 @@
                 });
                 renderAuditTable();
                 updateTotalAudited();
+                salvarPersistenciaLocal();
                 showAlert("Todas as filiais foram inseridas para auditoria!");
-            } else if (acao === 'exportarDados') {
-                const dadosStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({mainData, auditData}, null, 2));
-                const downloadAnchor = document.createElement('a');
-                downloadAnchor.setAttribute("href", dadosStr);
-                downloadAnchor.setAttribute("download", "relatorio_cd_operacional.json");
-                document.body.appendChild(downloadAnchor);
-                downloadAnchor.click();
-                downloadAnchor.remove();
-                showAlert("Relatório exportado com sucesso!");
+                fecharModalLuis();
+            } else if (acao === 'exportarJsonDia') {
+                exportarJsonDia();
+            } else if (acao === 'desfazerSalvar') {
+                desfazerSalvarDia();
             } else if (acao === 'forcarMeta') {
-                dispararConfetesEParabens(document.getElementById('totalAuditedValue').innerText || metaDiariaValor);
+                dispararConfetesEParabens(document.getElementById('totalAuditedValue').innerText || 3900);
+                fecharModalLuis();
             } else if (acao === 'limparDados') {
                 resetData();
+                fecharModalLuis();
+            }
+        }
+
+        function exportarJsonDia() {
+            const relatorio = {
+                dataGeracao: new Date().toISOString(),
+                pedido: document.getElementById('mainOrderNum').innerText,
+                cd: document.getElementById('cdNameDisplay').innerText,
+                totalAudited: document.getElementById('totalAuditedValue').innerText,
+                mainData: mainData,
+                auditData: auditData
+            };
+            const dadosStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(relatorio, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dadosStr);
+            downloadAnchor.setAttribute("download", `relatorio_cd_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showAlert("JSON do dia gerado e baixado com sucesso!");
+            fecharModalLuis();
+        }
+
+        function carregarArquivoJson(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.mainData) mainData = parsed.mainData;
+                    if (parsed.auditData) auditData = parsed.auditData;
+                    if (parsed.pedido) document.getElementById('mainOrderNum').innerText = parsed.pedido;
+                    if (parsed.cd) document.getElementById('cdNameDisplay').innerText = parsed.cd;
+                    
+                    renderMainTable();
+                    renderAuditTable();
+                    updateTotalAudited();
+                    atualizarTotalGeralPedido();
+                    salvarPersistenciaLocal();
+                    showAlert("Arquivo JSON carregado com sucesso!");
+                    fecharModalLuis();
+                } catch(err) {
+                    console.error(err);
+                    showAlert("Erro ao processar arquivo JSON.");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function desfazerSalvarDia() {
+            const backupStr = localStorage.getItem('cd_backup_ultimo_salvar');
+            if (!backupStr) {
+                showAlert("Nenhum registro anterior encontrado para desfazer.");
+                return;
+            }
+            try {
+                const backup = JSON.parse(backupStr);
+                mainData = backup.mainData;
+                auditData = backup.auditData;
+                filiaisInseridasHoje = new Set(backup.filiaisInseridas || []);
+                
+                if (backup.mesAno && backup.historicoMensal) {
+                    localStorage.setItem(STORAGE_KEY_PREFIX + backup.mesAno, JSON.stringify(backup.historicoMensal));
+                }
+                
+                salvarPersistenciaLocal();
+                renderMainTable();
+                renderAuditTable();
+                updateTotalAudited();
+                atualizarTotalGeralPedido();
+                
+                localStorage.removeItem('cd_backup_ultimo_salvar');
+                showAlert("Último salvamento desfeito com sucesso! Estado corrigido.");
+                fecharModalLuis();
+            } catch(e) {
+                console.error(e);
+                showAlert("Erro ao tentar desfazer salvamento.");
+            }
+        }
+
+        function liberarLojaManual() {
+            const inputVal = document.getElementById('inputCorrigirLoja').value.trim();
+            const filialNum = parseInt(inputVal);
+            if (isNaN(filialNum)) {
+                showAlert("Digite o número de uma filial válida para corrigir.");
+                return;
+            }
+
+            let liberou = false;
+
+            if (filiaisInseridasHoje.has(filialNum)) {
+                filiaisInseridasHoje.delete(filialNum);
+                liberou = true;
+            }
+
+            const item = mainData.find(i => i.filial === filialNum);
+            const historicoConfs = carregarHistoricoConferenciasMensal();
+            if (historicoConfs[filialNum] && historicoConfs[filialNum] > 0) {
+                historicoConfs[filialNum] -= 1;
+                const mesAno = getMesAnoAtual();
+                localStorage.setItem(STORAGE_KEY_PREFIX + mesAno, JSON.stringify(historicoConfs));
+                if (item) item.confCount = historicoConfs[filialNum];
+                liberou = true;
+            }
+
+            try {
+                let savedFiliaisIns = localStorage.getItem('cd_persisted_filiaisInseridas');
+                if (savedFiliaisIns) {
+                    let arr = JSON.parse(savedFiliaisIns);
+                    arr = arr.filter(f => f !== filialNum);
+                    localStorage.setItem('cd_persisted_filiaisInseridas', JSON.stringify(arr));
+                }
+            } catch(e) { console.error(e); }
+
+            salvarPersistenciaLocal();
+            renderMainTable();
+            renderAuditTable();
+            document.getElementById('inputCorrigirLoja').value = '';
+
+            if (liberou) {
+                showAlert(`Loja ${filialNum} liberada e contagem ajustada com sucesso!`);
+            } else {
+                showAlert(`A loja ${filialNum} não estava bloqueada ou não possui registros salvos.`);
             }
             fecharModalLuis();
         }
 
+        function carregarArquivoJsonDireto(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.mainData) mainData = parsed.mainData;
+                    if (parsed.auditData) auditData = parsed.auditData;
+                    if (parsed.pedido) document.getElementById('mainOrderNum').innerText = parsed.pedido;
+                    if (parsed.cd) document.getElementById('cdNameDisplay').innerText = parsed.cd;
+                    
+                    renderMainTable();
+                    renderAuditTable();
+                    updateTotalAudited();
+                    atualizarTotalGeralPedido();
+                    salvarPersistenciaLocal();
+                    showAlert("Arquivo de backup JSON carregado com sucesso!");
+                } catch(err) {
+                    console.error(err);
+                    showAlert("Erro ao processar arquivo JSON.");
+                }
+            };
+            reader.readAsText(file);
+        }
+
         window.onload = function() {
+            try {
+                const savedMain = localStorage.getItem('cd_persisted_mainData');
+                const savedAudit = localStorage.getItem('cd_persisted_auditData');
+                const savedOrder = localStorage.getItem('cd_persisted_orderNum');
+                const savedCd = localStorage.getItem('cd_persisted_cdName');
+                const savedFiles = localStorage.getItem('cd_persisted_fileNames');
+                const savedFiliaisIns = localStorage.getItem('cd_persisted_filiaisInseridas');
+
+                if (savedMain) mainData = JSON.parse(savedMain);
+                if (savedAudit) auditData = JSON.parse(savedAudit);
+                if (savedOrder && savedOrder !== "---") document.getElementById('mainOrderNum').innerText = savedOrder;
+                if (savedCd) document.getElementById('cdNameDisplay').innerText = savedCd;
+                if (savedFiles && savedFiles !== "Nenhum arquivo selecionado") {
+                    const fd = document.getElementById('fileNamesDisplay');
+                    fd.innerText = savedFiles;
+                    fd.classList.remove('italic', 'text-slate-500');
+                    fd.classList.add('font-semibold', 'text-blue-700');
+                }
+                if (savedFiliaisIns) filiaisInseridasHoje = new Set(JSON.parse(savedFiliaisIns));
+                
+                const historicoConfs = carregarHistoricoConferenciasMensal();
+                mainData.forEach(item => {
+                    item.confCount = historicoConfs[item.filial] || 0;
+                });
+            } catch(e) {
+                console.error("Erro ao restaurar do localStorage:", e);
+            }
+
             renderMainTable();
             renderAuditTable();
             updateTotalAudited();
@@ -738,28 +976,41 @@
                 <!-- Ações Operacionais -->
                 <div class="space-y-2">
                     <span class="block text-xs font-bold uppercase tracking-wider text-black">Ações do Sistema</span>
-                    <button onclick="executarFuncaoEspecial('marcarTodas')" class="w-full text-left bg-white hover:bg-gray-100 border border-black text-black font-semibold py-2.5 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
+                    <button onclick="executarFuncaoEspecial('marcarTodas')" class="w-full text-left bg-white hover:bg-gray-100 border border-black text-black font-semibold py-2 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
                         <span>Marcar Todas como Conferidas (Hoje)</span>
                         <span>[OK]</span>
                     </button>
-                    <button onclick="executarFuncaoEspecial('exportarDados')" class="w-full text-left bg-white hover:bg-gray-100 border border-black text-black font-semibold py-2.5 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
-                        <span>Exportar Relatório do Dia (JSON)</span>
-                        <span>[EXPORT]</span>
+                    <button onclick="executarFuncaoEspecial('exportarJsonDia')" class="w-full text-left bg-white hover:bg-gray-100 border border-black text-black font-semibold py-2 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
+                        <span>Criar JSON do Dia</span>
+                        <span>[EXPORT JSON]</span>
                     </button>
-                    <button onclick="executarFuncaoEspecial('forcarMeta')" class="w-full text-left bg-white hover:bg-gray-100 border border-black text-black font-semibold py-2.5 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
+                    <label class="w-full text-left bg-white hover:bg-gray-100 border border-black text-black font-semibold py-2.5 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center cursor-pointer">
+                        <span>Carregar Arquivo JSON</span>
+                        <span>[IMPORT JSON]</span>
+                        <input type="file" id="jsonFileInput" accept=".json" class="hidden" onchange="carregarArquivoJson(event)">
+                    </label>
+                    <button onclick="executarFuncaoEspecial('desfazerSalvar')" class="w-full text-left bg-white hover:bg-gray-100 border border-black text-black font-semibold py-2.5 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
+                        <span>Desfazer Último "Salvar Dia" (Geral)</span>
+                        <span>[UNDO]</span>
+                    </button>
+                    
+                    <!-- Correção Manual de Loja Específica -->
+                    <div class="bg-gray-100 border border-black p-3 space-y-2">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-black">Liberar / Corrigir Loja Específica</label>
+                        <div class="flex gap-2">
+                            <input type="number" id="inputCorrigirLoja" placeholder="Nº da loja..." class="flex-grow bg-white border border-black px-2 py-1.5 text-xs text-black font-bold focus:outline-none">
+                            <button onclick="liberarLojaManual()" class="bg-black hover:bg-gray-800 text-white font-bold px-3 py-1.5 text-xs uppercase tracking-wider transition">Liberar</button>
+                        </div>
+                        <p class="text-[10px] text-gray-600">Remove o bloqueio de duplicata e desconta 1 salvamento da loja informada.</p>
+                    </div>
+                    <button onclick="executarFuncaoEspecial('forcarMeta')" class="w-full text-left bg-gray-100 hover:bg-gray-200 border border-black text-black font-semibold py-2.5 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
                         <span>Forçar Disparo de Meta Atingida</span>
                         <span>[TEST]</span>
                     </button>
-                    <button onclick="executarFuncaoEspecial('limparDados')" class="w-full text-left bg-white hover:bg-gray-100 border border-black text-black font-semibold py-2.5 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
-                        <span>Limpar Dados do Sistema</span>
+                    <button onclick="executarFuncaoEspecial('limparDados')" class="w-full text-left bg-red-100 hover:bg-red-200 border border-red-800 text-red-900 font-bold py-2.5 px-4 text-xs uppercase tracking-wider transition flex justify-between items-center">
+                        <span>Limpar Todos os Dados</span>
                         <span>[RESET]</span>
                     </button>
-                </div>
-
-                <!-- Status de Exibição -->
-                <div class="bg-gray-100 border border-black p-3 flex justify-between items-center text-xs font-bold uppercase tracking-wider text-black">
-                    <span>Modo de Exibição</span>
-                    <span>Ativo</span>
                 </div>
             </div>
 
